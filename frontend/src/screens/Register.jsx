@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import axios from '../config/axios';    
 
 const Register = () => {
 
@@ -9,11 +10,15 @@ const Register = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Add your login logic here
-    console.log('Login attempt with:', email, password);
-    
-    // Example: After successful login, navigate to home
-    // navigate('/');
+ axios.post('/register', { email, password })
+      .then((res) => {
+        console.log(res.data);
+        navigate('/');
+      })
+      .catch((err) => {
+        console.log(err.response.data)
+  })
+
   };
 
   return (

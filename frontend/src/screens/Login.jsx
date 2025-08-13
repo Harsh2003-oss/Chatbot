@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import axios from '../config/axios';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -8,12 +9,16 @@ const Login = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Add your login logic here
-    console.log('Login attempt with:', email, password);
-    
-    // Example: After successful login, navigate to home
-    // navigate('/');
-  };
+   
+    axios.post('/login', { email, password })
+      .then((res) => {
+        console.log(res.data);
+        navigate('/');
+      })
+      .catch((err) => {
+        console.log(err.response.data)
+  })
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">

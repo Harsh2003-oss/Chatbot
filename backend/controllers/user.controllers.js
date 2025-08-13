@@ -15,6 +15,8 @@ const errors = validationResult(req);
        
        const token = await user.generateJWT()
        
+delete user._doc.password; // Remove password from response 
+
         res.status(201).json({user , token});
     }catch(error){
         res.status(400).send(error.message)

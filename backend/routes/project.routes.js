@@ -11,4 +11,7 @@ router.post('/create',
     projectController.createProject
 )
 
+router.get('/all', authMiddleware.authUser,
+    projectController.getAllProjects
+)
 module.exports = router;

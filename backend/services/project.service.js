@@ -1,6 +1,6 @@
 const projectModel = require('../models/project.model');
 
-export const createProject = async ({
+ const createProject = async ({
     name,userId
 }) => {
     if(!name){
@@ -16,3 +16,5 @@ export const createProject = async ({
     })
     return project;
 }
+
+module.exports = {createProject}

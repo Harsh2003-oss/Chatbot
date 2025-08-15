@@ -12,7 +12,7 @@ const createProject = async (req, res) => {
     try{
 
 
- const { name } = req.body;
+ const { name ,email } = req.body;
    const loggedInUser = await userModel.findOne({email});
 const userId = loggedInUser._id;
 
@@ -24,3 +24,5 @@ res.status(201).json({newProject});
         res .status(400).json({ error: error.message });
 }
 }
+
+module.exports = {createProject}

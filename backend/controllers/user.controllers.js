@@ -98,4 +98,22 @@ try {
 
 }
 
- module.exports = {createUserController,loginController,profileController,logoutController}
+const getAllUsersController = async (req, res) => {
+    try { 
+        
+        const loggedInUser = await userModel.findOne({
+            email: req.user.email
+        });
+        
+const allusers = await userService.getAllUsers({
+    userId: loggedInUser._id
+});
+       res.status(200).json({
+            users: allusers
+        });
+    }catch (error) {
+        console.log(error);
+        res.status(400).json({ error: error.message });
+    }
+}
+ module.exports = {createUserController,loginController,profileController,logoutController, getAllUsersController}

@@ -25,6 +25,12 @@ router.put('/add-user',
     projectController.addUserToProject
 )
 
+router.get('/allusers',
+    authMiddleware.authUser,
+    userController.getAllUsersController)
 
+router.get('/get-project/:projectId',
+    authMiddleware.authUser,
+projectController.getProjectById)
 
 module.exports = router;

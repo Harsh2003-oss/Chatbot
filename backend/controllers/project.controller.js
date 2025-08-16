@@ -70,4 +70,20 @@ try {
     res.status(400).json({ error: error.message });
 }
 }
-module.exports = {createProject, getAllProjects, addUserToProject};
+
+const getProjectById = async (req, res) => {
+    const { projectId } = req.params;
+
+try {
+    
+    const project= await projectModel.findById(
+        projectId)
+
+        return res.status(200).json({ project });
+
+} catch (error) {
+    console.log(error)
+    res.status(400).json({ error: error.message });
+}
+}
+module.exports = {createProject, getAllProjects, addUserToProject, getProjectById};

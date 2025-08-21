@@ -64,7 +64,7 @@ setProject(response.data.allUserProjects);
             <div key={projectItem._id}
             onClick={() =>{
                navigate(`/project`,{
-              state:{projectItem}
+              state:{projectId:projectItem._id}
             });
             }
             }       

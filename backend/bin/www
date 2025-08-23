@@ -7,6 +7,8 @@
 var app = require('../app');
 var debug = require('debug')('backend:server');
 var http = require('http');
+const {Server} = require('socket.io');
+const jwt = require('jsonwebtoken');
 
 /**
  * Get port from environment and store in Express.
@@ -20,6 +22,60 @@ app.set('port', port);
  */
 
 var server = http.createServer(app);
+
+
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
+io.use((socket, next) => {
+
+  try {
+    const token = socket.handshake.auth?.token || socket.handshake.headers.authorization?.split(' ')[1];
+
+    if (token !== "your_secret_token") {
+      console.log('❌ Authentication error: Invalid token');
+
+    }
+
+const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+if(!decoded){
+  console.log('❌ Authentication error: Invalid token');
+  return next(new Error("Authentication error: Invalid token"));
+}
+
+    socket.user = decoded;
+
+
+    console.log('✅ Authentication successful');
+    next();
+    
+  } catch (error) {
+    next(error);
+  }
+  })
+
+io.on('connection', (socket) => {
+  console.log('✅ A user connected! Socket ID:', socket.id);
+  
+  socket.on('event', (data) => {
+    console.log('📨 Received event from client:', data);
+    socket.emit('event', { 
+      message: 'Server received your message!', 
+      serverTime: new Date(),
+      originalData: data
+    });
+  });
+  
+  socket.on('disconnect', () => {
+    console.log('❌ User disconnected! Socket ID:', socket.id);
+  });
+});
+
 
 /**
  * Listen on provided port, on all network interfaces.

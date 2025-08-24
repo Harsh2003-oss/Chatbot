@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useContext } from 'react'
 import axios from '../config/axios'
 import { useLocation } from 'react-router-dom'
-import { initializeSocket, recieveMessage, sendMessage } from '../config/socket'
+import { initializeSocket, recieveMessage, sendMessage, disconnectSocket } from '../config/socket' // Add disconnectSocket import
+import { UserContext } from '../context/user.context'
 
 const Project = () => {
     const location = useLocation();
@@ -11,18 +12,18 @@ const Project = () => {
     const [selectedUsers, setSelectedUsers] = useState([]);
     const [users, setUsers] = useState([]);
     const [project, setProject] = useState(location.state.project);
-    const [projectCollaborators, setProjectCollaborators] = useState([]); // Add this state
+    const [projectCollaborators, setProjectCollaborators] = useState([]);
+    const [message, setMessage] = useState("");
+    const { user } = useContext(UserContext);
 
     const handleUserSelect = (userId) => {
         console.log('Clicking user ID:', userId);
         console.log('Current selectedUsers:', selectedUsers);
         console.log('User ID type:', typeof userId);
         
-        // Ensure userId is treated as string for consistent comparison
         const userIdStr = String(userId);
         
         setSelectedUsers(prev => {
-            // Convert all IDs to strings for comparison
             const prevStrings = prev.map(id => String(id));
             const isSelected = prevStrings.includes(userIdStr);
             
@@ -45,37 +46,31 @@ const Project = () => {
             users: Array.from(selectedUsers)
         }).then((response) => {
             console.log(response.data);
-            // Refresh project collaborators after adding
             fetchProjectWithCollaborators();
-            setSelectedUsers([]); // Clear selected users after adding
+            setSelectedUsers([]);
         }).catch((error) => {
             console.error('Error adding collaborators:', error);
         });
     }
 
-    // Add function to fetch project collaborators
     const fetchProjectCollaborators = async () => {
         try {
             const response = await axios.get(`/projects/get-project/${location.state.projectId}`);
             setProject(response.data.project);
             
-            console.log('Project data:', response.data.project); // Debug log
+            console.log('Project data:', response.data.project);
             
-            // The project has a 'users' array with user IDs (not 'collaborators')
             if (response.data.project.users && response.data.project.users.length > 0) {
-                console.log('Project users array:', response.data.project.users); // Debug log
+                console.log('Project users array:', response.data.project.users);
                 
-                // Since you already have all users loaded, find matching users from the users state
-                // If users state is not loaded yet, we'll update collaborators when users are loaded
                 if (users.length > 0) {
                     const projectUserIds = response.data.project.users.map(id => String(id));
                     const collaborators = users.filter(user => 
                         projectUserIds.includes(String(user._id || user.id))
                     );
-                    console.log('Found collaborators:', collaborators); // Debug log
+                    console.log('Found collaborators:', collaborators);
                     setProjectCollaborators(collaborators);
                 } else {
-                    // Users not loaded yet, we'll handle this in useEffect
                     console.log('Users not loaded yet, will update collaborators after users are fetched');
                 }
             } else {
@@ -86,9 +81,16 @@ const Project = () => {
         }
     };
 
-    // Real API call
+    function send() {
+        sendMessage('event', { 
+            message,
+            sender: user._id
+        });
+        setMessage("");
+    }
+
+    // Fetch users on component mount
     useEffect(() => {
-        // Fetch all users first
         axios.get('/projects/allusers').then((response) => {
             console.log('API Response:', response.data.users);
             console.log('First user structure:', response.data.users[0]);
@@ -100,28 +102,42 @@ const Project = () => {
             console.log('Processed users:', usersWithStringIds);
             setUsers(usersWithStringIds);
             
-            // After users are loaded, fetch project and set collaborators
             fetchProjectWithCollaborators(usersWithStringIds);
         }).catch((error) => {
             console.error('Error fetching users:', error);
         });
     }, []);
 
-    // Separate function to fetch project and match collaborators
+    // Socket initialization and cleanup
+    useEffect(() => {
+        if (project && project._id) {
+            console.log('🔌 Initializing socket for project:', project._id);
+            initializeSocket(project._id);
+            
+            recieveMessage('event', (data) => {
+                console.log('📨 Message from server:', data);
+            });
+        }
+
+        // ✅ Fixed cleanup function - use disconnectSocket instead of io
+        return () => {
+            console.log('🧹 Cleaning up socket connection');
+            disconnectSocket();
+        };
+    }, [project]);
+
     const fetchProjectWithCollaborators = async (allUsers = users) => {
         try {
             const response = await axios.get(`/projects/get-project/${location.state.projectId}`);
-            setProject(response.data.project);
+            const projectData = response.data.project;
+            setProject(projectData);
             
-initializeSocket();
-
-            console.log('Project data:', response.data.project);
+            console.log('Project data:', projectData);
             
-            if (response.data.project.users && response.data.project.users.length > 0) {
-                console.log('Project users array:', response.data.project.users);
+            if (projectData.users && projectData.users.length > 0) {
+                console.log('Project users array:', projectData.users);
                 
-                // Match project user IDs with the users from allUsers array
-                const projectUserIds = response.data.project.users.map(id => String(id));
+                const projectUserIds = projectData.users.map(id => String(id));
                 const collaborators = allUsers.filter(user => 
                     projectUserIds.includes(String(user._id || user.id))
                 );
@@ -142,9 +158,6 @@ initializeSocket();
             <main className='h-screen w-screen flex'>
                 <section className='flex relative flex-col left h-full min-w-96 bg-slate-300'>
                     <header className='flex justify-between items-center p-2 px-4 w-full bg-slate-100'>
-                      
-
-                      
                         <button
                             className='flex gap-2 hover:bg-slate-200 px-3 py-2 rounded-md transition-colors'
                             onClick={() => setIsModalOpen(true)}
@@ -175,9 +188,15 @@ initializeSocket();
                         
                         <div className="input-field w-full flex">
                             <input
+                                value={message}
+                                onChange={(e) => setMessage(e.target.value)}
                                 className='p-2 flex-grow px-4 border-none outline-none'
-                                type="text" placeholder='Enter message' />
-                            <button className='px-5 bg-slate-950 text-white hover:bg-slate-800 transition-colors'>
+                                type="text" 
+                                placeholder='Enter message' 
+                            />
+                            <button 
+                                onClick={send}
+                                className='px-5 bg-slate-950 text-white hover:bg-slate-800 transition-colors'>
                                 <i className="ri-send-plane-fill"></i>
                             </button>
                         </div>
@@ -194,7 +213,6 @@ initializeSocket();
                         </header>
   
                         <div className="users flex flex-col gap-2 p-2">
-                            {/* Show existing project collaborators */}
                             <div className="project-collaborators">
                                 <h3 className="font-semibold mb-2 text-gray-700">Project Collaborators ({projectCollaborators.length})</h3>
                                 {projectCollaborators.length === 0 ? (
@@ -211,7 +229,6 @@ initializeSocket();
                                 )}
                             </div>
 
-                            {/* Show selected users (pending to be added) */}
                             {selectedUsers.length > 0 && (
                                 <div className="selected-users mt-4 pt-4 border-t border-gray-300">
                                     <h3 className="font-semibold mb-2 text-blue-700">Pending Collaborators ({selectedUsers.length})</h3>
@@ -257,7 +274,6 @@ initializeSocket();
                                         String(selectedId) === String(user.id)
                                     );
                                     
-                                    // Check if user is already a collaborator
                                     const isAlreadyCollaborator = projectCollaborators.some(collaborator => 
                                         String(collaborator._id || collaborator.id) === String(user.id)
                                     );
@@ -266,7 +282,7 @@ initializeSocket();
                                         <div
                                             key={user.id}
                                             onClick={(e) => {
-                                                if (isAlreadyCollaborator) return; // Don't allow selecting existing collaborators
+                                                if (isAlreadyCollaborator) return;
                                                 e.preventDefault();
                                                 e.stopPropagation();
                                                 handleUserSelect(user.id);

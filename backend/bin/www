@@ -9,6 +9,8 @@ var debug = require('debug')('backend:server');
 var http = require('http');
 const {Server} = require('socket.io');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
+const projectModel = require('../models/project.model');
 
 /**
  * Get port from environment and store in Express.
@@ -23,7 +25,6 @@ app.set('port', port);
 
 var server = http.createServer(app);
 
-
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -31,43 +32,69 @@ const io = new Server(server, {
   }
 });
 
-io.use((socket, next) => {
-
+io.use(async(socket, next) => {
   try {
     const token = socket.handshake.auth?.token || socket.handshake.headers.authorization?.split(' ')[1];
+    const projectId = socket.handshake.query.projectId;
 
-    if (token !== "your_secret_token") {
-      console.log('❌ Authentication error: Invalid token');
-
+    // Validate projectId
+    if (!projectId || typeof projectId !== 'string' || !mongoose.Types.ObjectId.isValid(projectId)) {
+      console.log('❌ Authentication error: Invalid or missing projectId');
+      return next(new Error("Authentication error: Invalid or missing projectId"));
     }
 
-const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Validate token
+    if (!token) {
+      console.log('❌ Authentication error: Missing token');
+      return next(new Error("Authentication error: Missing token"));
+    }
 
-if(!decoded){
-  console.log('❌ Authentication error: Invalid token');
-  return next(new Error("Authentication error: Invalid token"));
-}
+    // Verify JWT token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!decoded) {
+      console.log('❌ Authentication error: Invalid token');
+      return next(new Error("Authentication error: Invalid token"));
+    }
 
+    // Find project
+    const project = await projectModel.findById(projectId);
+    if (!project) {
+      console.log('❌ Authentication error: Project not found');
+      return next(new Error("Authentication error: Project not found"));
+    }
+
+    // Attach user and project to socket
     socket.user = decoded;
-
-
-    console.log('✅ Authentication successful');
+    socket.project = project;
+    
+    console.log('✅ Authentication successful for project:', projectId);
     next();
     
   } catch (error) {
-    next(error);
+    console.log('❌ Authentication error:', error.message);
+    next(new Error("Authentication error: " + error.message));
   }
-  })
+});
 
 io.on('connection', (socket) => {
   console.log('✅ A user connected! Socket ID:', socket.id);
+  console.log('📂 Project ID:', socket.project._id.toString());
+  
+  // Join the project room using the ObjectId converted to string
+  socket.join(socket.project._id.toString());
   
   socket.on('event', (data) => {
     console.log('📨 Received event from client:', data);
-    socket.emit('event', { 
-      message: 'Server received your message!', 
+    console.log('📂 From project:', socket.project.name);
+    
+    socket.emit('event', {
+      message: 'Server received your message!',
       serverTime: new Date(),
-      originalData: data
+      originalData: data,
+      projectInfo: {
+        id: socket.project._id,
+        name: socket.project.name
+      }
     });
   });
   
@@ -76,49 +103,34 @@ io.on('connection', (socket) => {
   });
 });
 
-
-/**
- * Listen on provided port, on all network interfaces.
- */
-
+// Rest of your code remains the same...
 server.listen(port);
 server.on('error', onError);
 server.on('listening', onListening);
 
-/**
- * Normalize a port into a number, string, or false.
- */
-
 function normalizePort(val) {
   var port = parseInt(val, 10);
-
+  
   if (isNaN(port)) {
-    // named pipe
     return val;
   }
-
+  
   if (port >= 0) {
-    // port number
     return port;
   }
-
+  
   return false;
 }
-
-/**
- * Event listener for HTTP server "error" event.
- */
 
 function onError(error) {
   if (error.syscall !== 'listen') {
     throw error;
   }
-
+  
   var bind = typeof port === 'string'
     ? 'Pipe ' + port
     : 'Port ' + port;
-
-  // handle specific listen errors with friendly messages
+  
   switch (error.code) {
     case 'EACCES':
       console.error(bind + ' requires elevated privileges');
@@ -132,10 +144,6 @@ function onError(error) {
       throw error;
   }
 }
-
-/**
- * Event listener for HTTP server "listening" event.
- */
 
 function onListening() {
   var addr = server.address();

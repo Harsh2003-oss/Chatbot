@@ -99,7 +99,6 @@ export const initializeSocket = (projectId) => {
         console.log('   - ID:', socket.id);
         console.log('   - Transport:', socket.io.engine?.transport?.name);
     }, 2000);
-
     return socket;
 };
 

@@ -76,33 +76,73 @@ io.use(async(socket, next) => {
   }
 });
 
+// Replace your socket.on('connection') section with this:
+
 io.on('connection', (socket) => {
   console.log('✅ A user connected! Socket ID:', socket.id);
   console.log('📂 Project ID:', socket.project._id.toString());
+  console.log('👤 User:', socket.user.email || socket.user.id);
   
+  socket.roomId = socket.project._id.toString();
+
   // Join the project room using the ObjectId converted to string
-  socket.join(socket.project._id.toString());
+  socket.join(socket.roomId);
+  console.log('🚪 User joined room:', socket.roomId);
   
-  socket.on('event', (data) => {
-    console.log('📨 Received event from client:', data);
-    console.log('📂 From project:', socket.project.name);
-    
-    socket.emit('event', {
-      message: 'Server received your message!',
-      serverTime: new Date(),
-      originalData: data,
-      projectInfo: {
-        id: socket.project._id,
-        name: socket.project.name
-      }
-    });
-  });
+  // Log current room members - THIS IS CRUCIAL
+  const room = io.sockets.adapter.rooms.get(socket.roomId);
+  console.log(`📊 Room ${socket.roomId} now has ${room ? room.size : 0} members`);
   
+  // Replace your socket.on('event', (data) => { ... }) handler with this:
+
+socket.on('event', (data) => {
+  console.log('📨 Received event from client:', data);
+  console.log('📂 From project:', socket.project.name);
+  console.log('👤 From user:', socket.user.email || socket.user.id || socket.user._id);
+  
+  // Check current room state
+  const currentRoom = io.sockets.adapter.rooms.get(socket.roomId);
+  console.log('📊 Broadcasting to room with', currentRoom ? currentRoom.size : 0, 'members');
+
+  // ✅ Fixed: Better handling of user ID from JWT token
+  const userId = socket.user.id || socket.user._id || socket.user.userId;
+  
+  // ✅ Debug: Log the complete user object to see its structure
+  console.log('🔍 Complete user object from JWT:', JSON.stringify(socket.user, null, 2));
+
+  const messageData = {
+    message: data.message,  // ✅ Remove fallback to data directly
+    sender: {
+      id: userId,  // ✅ Use the properly extracted user ID
+      email: socket.user.email
+    },
+    project: {
+      id: socket.project._id,
+      name: socket.project.name
+    },
+    serverTime: new Date().toISOString(),  // ✅ Convert to ISO string
+    timestamp: new Date()  // ✅ Add timestamp for client
+  };
+
+  // ✅ Debug: Log the message data being sent
+  console.log('📤 Message data being broadcast:', JSON.stringify(messageData, null, 2));
+
+  // CRITICAL: Use io.to() instead of socket.broadcast.to()
+  console.log('📡 Broadcasting to room:', socket.roomId);
+  io.to(socket.roomId).emit('event', messageData);
+  console.log('✅ Message broadcast complete');
+});
   socket.on('disconnect', () => {
     console.log('❌ User disconnected! Socket ID:', socket.id);
+    console.log('👤 User:', socket.user.email || socket.user.id);
+    
+    // Check room size after disconnect
+    setTimeout(() => {
+      const room = io.sockets.adapter.rooms.get(socket.roomId);
+      console.log(`📊 Room ${socket.roomId} now has ${room ? room.size : 0} members`);
+    }, 100);
   });
 });
-
 // Rest of your code remains the same...
 server.listen(port);
 server.on('error', onError);

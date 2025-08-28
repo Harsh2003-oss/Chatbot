@@ -3,6 +3,7 @@ import axios from '../config/axios'
 import { useLocation } from 'react-router-dom'
 import { initializeSocket, receiveMessage, sendMessage, disconnectSocket } from '../config/socket'
 import { UserContext } from '../context/user.context'
+import Markdown from 'markdown-to-jsx';
 
 const Project = () => {
     const location = useLocation();
@@ -229,17 +230,19 @@ const Project = () => {
                                 </div>
                             ) : (
                                 <>
-                                    {messages.map((msg) => (
-                                        <div key={msg.id} className={`max-w-56 message flex flex-col gap-1 w-fit rounded-md p-3 shadow-sm ${msg.isOwn ? 'ml-auto bg-blue-50 text-right' : 'mr-auto bg-slate-50 text-left'}`}>
-                                            <small className='opacity-65 text-xs font-medium'>
-                                                {getUserEmail(msg.sender)}
-                                            </small>
-                                            <p className='text-sm'>{msg.message}</p>
-                                            <small className='opacity-50 text-xs'>
-                                                {msg.timestamp.toLocaleTimeString()}
-                                            </small>
-                                        </div>
-                                    ))}
+                   {messages.map((msg) => (
+    <div key={msg.id} className={`max-w-96 message flex flex-col gap-1 w-fit rounded-md p-3 shadow-sm ${msg.isOwn ? 'ml-auto bg-blue-50 text-right' : 'mr-auto bg-slate-50 text-left'}`}>
+        <small className='opacity-65 text-xs font-medium'>
+            {getUserEmail(msg.sender)}
+        </small>
+        <div className='overflow-auto bg-slate-900 text-white rounded-sm p-2'>
+            <Markdown>{msg.message}</Markdown>
+        </div>
+        <small className='opacity-50 text-xs'>
+            {msg.timestamp.toLocaleTimeString()}
+        </small>
+    </div>
+))}
                                     {/* ✅ Invisible div to scroll to */}
                                     <div ref={messagesEndRef} />
                                 </>

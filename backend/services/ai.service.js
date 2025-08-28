@@ -1,14 +1,20 @@
-const { GoogleGenAI } = require ("@google/genai")
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const ai = new GoogleGenAI(process.env.GOOGLE_API_KEY);
+const ai = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 const generateResult = async (prompt) => {
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-    systemInstruction:`You are an expert in MUN and development. You have an experience of 10 years in the development. You always write code in modular and break the code in the possible way and follow best practices. You use understandable comments in the code. You create files as needed. You write code while maintaining the working of previous code. You always follow the best practices of the development. You never miss the edge cases and always write code that is scalable and maintainable. In your code, you always handle the errors and exceptions.`
-  });
- return response.text;
-}
+  try {
+    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+    
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    
+    return response.text();
+    
+  } catch (error) {
+    console.log('AI Service Error:', error.message);
+    return 'Sorry, I encountered an error processing your request.';
+  }
+};
 
-module.exports = {generateResult}
+module.exports = { generateResult };

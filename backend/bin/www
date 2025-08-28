@@ -1,9 +1,5 @@
 #!/usr/bin/env node
 
-/**
- * Module dependencies.
- */
-
 var app = require('../app');
 var debug = require('debug')('backend:server');
 var http = require('http');
@@ -11,17 +7,10 @@ const {Server} = require('socket.io');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const projectModel = require('../models/project.model');
-
-/**
- * Get port from environment and store in Express.
- */
+const {generateResult} = require('../services/ai.service');
 
 var port = normalizePort(process.env.PORT || '3000');
 app.set('port', port);
-
-/**
- * Create HTTP server.
- */
 
 var server = http.createServer(app);
 
@@ -37,113 +26,115 @@ io.use(async(socket, next) => {
     const token = socket.handshake.auth?.token || socket.handshake.headers.authorization?.split(' ')[1];
     const projectId = socket.handshake.query.projectId;
 
-    // Validate projectId
     if (!projectId || typeof projectId !== 'string' || !mongoose.Types.ObjectId.isValid(projectId)) {
-      console.log('❌ Authentication error: Invalid or missing projectId');
+      console.log('Authentication error: Invalid or missing projectId');
       return next(new Error("Authentication error: Invalid or missing projectId"));
     }
 
-    // Validate token
     if (!token) {
-      console.log('❌ Authentication error: Missing token');
+      console.log('Authentication error: Missing token');
       return next(new Error("Authentication error: Missing token"));
     }
 
-    // Verify JWT token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     if (!decoded) {
-      console.log('❌ Authentication error: Invalid token');
+      console.log('Authentication error: Invalid token');
       return next(new Error("Authentication error: Invalid token"));
     }
 
-    // Find project
     const project = await projectModel.findById(projectId);
     if (!project) {
-      console.log('❌ Authentication error: Project not found');
+      console.log('Authentication error: Project not found');
       return next(new Error("Authentication error: Project not found"));
     }
 
-    // Attach user and project to socket
     socket.user = decoded;
     socket.project = project;
     
-    console.log('✅ Authentication successful for project:', projectId);
+    console.log('Authentication successful for project:', projectId);
     next();
     
   } catch (error) {
-    console.log('❌ Authentication error:', error.message);
+    console.log('Authentication error:', error.message);
     next(new Error("Authentication error: " + error.message));
   }
 });
 
-// Replace your socket.on('connection') section with this:
-
 io.on('connection', (socket) => {
-  console.log('✅ A user connected! Socket ID:', socket.id);
-  console.log('📂 Project ID:', socket.project._id.toString());
-  console.log('👤 User:', socket.user.email || socket.user.id);
+  console.log('A user connected! Socket ID:', socket.id);
+  console.log('Project ID:', socket.project._id.toString());
+  console.log('User:', socket.user.email || socket.user.id);
   
   socket.roomId = socket.project._id.toString();
 
-  // Join the project room using the ObjectId converted to string
   socket.join(socket.roomId);
-  console.log('🚪 User joined room:', socket.roomId);
+  console.log('User joined room:', socket.roomId);
   
-  // Log current room members - THIS IS CRUCIAL
   const room = io.sockets.adapter.rooms.get(socket.roomId);
-  console.log(`📊 Room ${socket.roomId} now has ${room ? room.size : 0} members`);
-  
-  // Replace your socket.on('event', (data) => { ... }) handler with this:
+  console.log(`Room ${socket.roomId} now has ${room ? room.size : 0} members`);
 
-socket.on('event', (data) => {
-  console.log('📨 Received event from client:', data);
-  console.log('📂 From project:', socket.project.name);
-  console.log('👤 From user:', socket.user.email || socket.user.id || socket.user._id);
-  
-  // Check current room state
-  const currentRoom = io.sockets.adapter.rooms.get(socket.roomId);
-  console.log('📊 Broadcasting to room with', currentRoom ? currentRoom.size : 0, 'members');
-
-  // ✅ Fixed: Better handling of user ID from JWT token
-  const userId = socket.user.id || socket.user._id || socket.user.userId;
-  
-  // ✅ Debug: Log the complete user object to see its structure
-  console.log('🔍 Complete user object from JWT:', JSON.stringify(socket.user, null, 2));
-
-  const messageData = {
-    message: data.message,  // ✅ Remove fallback to data directly
-    sender: {
-      id: userId,  // ✅ Use the properly extracted user ID
-      email: socket.user.email
-    },
-    project: {
-      id: socket.project._id,
-      name: socket.project.name
-    },
-    serverTime: new Date().toISOString(),  // ✅ Convert to ISO string
-    timestamp: new Date()  // ✅ Add timestamp for client
-  };
-
-  // ✅ Debug: Log the message data being sent
-  console.log('📤 Message data being broadcast:', JSON.stringify(messageData, null, 2));
-
-  // CRITICAL: Use io.to() instead of socket.broadcast.to()
-  console.log('📡 Broadcasting to room:', socket.roomId);
-  io.to(socket.roomId).emit('event', messageData);
-  console.log('✅ Message broadcast complete');
-});
-  socket.on('disconnect', () => {
-    console.log('❌ User disconnected! Socket ID:', socket.id);
-    console.log('👤 User:', socket.user.email || socket.user.id);
+  socket.on('event', async (data) => {
+    console.log('Received event from client:', data);
+    console.log('From project:', socket.project.name);
+    console.log('From user:', socket.user.email || socket.user.id || socket.user._id);
     
-    // Check room size after disconnect
+    const currentRoom = io.sockets.adapter.rooms.get(socket.roomId);
+    console.log('Broadcasting to room with', currentRoom ? currentRoom.size : 0, 'members');
+
+    const userId = socket.user.id || socket.user._id || socket.user.userId;
+    
+    console.log('Complete user object from JWT:', JSON.stringify(socket.user, null, 2));
+
+    const message = data.message;
+    console.log('Message extracted:', message);
+
+    const aiIsPresentInMessage = message.includes('@ai');
+    console.log('AI present?', aiIsPresentInMessage);
+
+    if (aiIsPresentInMessage) {
+    
+      const prompt = message.replace('@ai', '');
+
+      const result = await generateResult(prompt);
+
+      io.to(socket.roomId).emit('event', {
+        message: result,
+        sender:{
+          _id: 'ai',
+          email: 'AI'
+        }
+      });
+      return;
+    }  
+
+    console.log('Past AI check, defining messageData...');
+    
+    const messageData = {
+      message: data.message,
+      sender: data.sender || userId,
+      timestamp: new Date().toISOString(),
+      projectId: socket.project._id.toString()
+    };
+
+    console.log('messageData defined successfully');
+    console.log('Message data being broadcast:', JSON.stringify(messageData, null, 2));
+
+    console.log('Broadcasting to room:', socket.roomId);
+    io.to(socket.roomId).emit('event', messageData);
+    console.log('Message broadcast complete');
+  });
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected! Socket ID:', socket.id);
+    console.log('User:', socket.user.email || socket.user.id);
+    
     setTimeout(() => {
       const room = io.sockets.adapter.rooms.get(socket.roomId);
-      console.log(`📊 Room ${socket.roomId} now has ${room ? room.size : 0} members`);
+      console.log(`Room ${socket.roomId} now has ${room ? room.size : 0} members`);
     }, 100);
   });
 });
-// Rest of your code remains the same...
+
 server.listen(port);
 server.on('error', onError);
 server.on('listening', onListening);

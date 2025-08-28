@@ -19,6 +19,7 @@
     "http-errors": "~1.6.3",
     "ioredis": "^5.7.0",
     "jsonwebtoken": "^9.0.2",
+    "markdown-to-jsx": "^7.7.13",
     "mongoose": "^8.17.0",
     "morgan": "~1.9.1",
     "redis": "^5.8.0",

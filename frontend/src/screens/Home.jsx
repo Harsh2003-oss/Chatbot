@@ -50,12 +50,24 @@ setProject(response.data.allUserProjects);
 }, []);
 
   return (
-    <>
-    <main className='p-4'>
-      <div className="projects flex flex-wrap gap-3">
+  
+    <main className='p-6  min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 text-white'>
+  
+<div className="hyperlinks flex gap-305 mb-6">
+       <a 
+       className="px-6 py-1 bg-gradient-to-r from-cyan-500 to-purple-600 text-white rounded-lg hover:from-cyan-600 hover:to-purple-700 transition-all duration-300 hover:scale-105 font-medium"
+       href="/login">Click to Login</a>
+
+<a 
+       className="px-6 py-1 bg-gradient-to-r from-cyan-500 to-purple-600 text-white rounded-lg hover:from-cyan-600 hover:to-purple-700 transition-all duration-300 hover:scale-105 font-medium"
+       href="/register">Click to Register</a>
+
+</div>
+
+      <div className="projects py-10 flex flex-wrap gap-3">
         <button 
         onClick={() => setIsModalOpen(true)}
-        className="project p-4 border border-slate-300 rounded-md">
+        className="project p-3 border border-slate-300 rounded-md ">
         New Project
           <i className="ri-link ml-2"></i>
         </button>
@@ -68,7 +80,7 @@ setProject(response.data.allUserProjects);
             });
             }
             }       
-             className="project p-4 flex flex-col gap-2 cursor-pointer border border-slate-300 rounded-md mb-4 min-w-52 hover:bg-slate-200">
+             className="project p-4 flex flex-col gap-2 cursor-pointer border border-slate-300 rounded-md mb-4 min-w-52 hover:bg-purple-400 hover:text-black transition">
             
               <h2 className='font-semibold' >{projectItem.name}</h2>
   
@@ -96,7 +108,7 @@ setProject(response.data.allUserProjects);
             onChange={(e) => setProjectName(e.target.value)}
               value={projectName}
               type="text"
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring focus:border-blue-400 mb-4"
+              className="w-full px-3 py-2 border border-gray-300 rounded text-black focus:outline-none focus:ring focus:border-blue-400 mb-4"
               placeholder="Enter project name"
               required
             />
@@ -122,7 +134,7 @@ setProject(response.data.allUserProjects);
  
 
     </main>
-    </>
+  
   )
 }
 

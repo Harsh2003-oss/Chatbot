@@ -17,8 +17,154 @@ const Project = () => {
     const [message, setMessage] = useState("");
     const [messages, setMessages] = useState([]);   
     const { user } = useContext(UserContext);
+    const [fielTree, setFileTree] = useState({
+        "app.js": {
+            content: `const express = require('express');`},
+            "package.json":`{
+    "name": "backend", }`
+    });
 
-    // ... all your existing functions remain the same ...
+
+    // ✅ Helper function to convert object response to text
+    const convertObjectToText = (data) => {
+        console.log('🔄 Converting data:', data);
+        console.log('🔄 Data type:', typeof data);
+        
+        try {
+            // If it's an object, extract text properties first
+            if (typeof data === 'object' && data !== null) {
+                console.log('🔄 Processing object data');
+                
+                // Check for common AI response formats in priority order
+                if (data.text) {
+                    console.log('🔄 Found data.text:', data.text);
+                    return String(data.text);
+                }
+                if (data.content) return String(data.content);
+                if (data.message) return String(data.message);
+                if (data.response) return String(data.response);
+                if (data.answer) return String(data.answer);
+                if (data.result) return String(data.result);
+                
+                // OpenAI format
+                if (data.choices && Array.isArray(data.choices) && data.choices[0]) {
+                    if (data.choices[0].message && data.choices[0].message.content) {
+                        return String(data.choices[0].message.content);
+                    }
+                    if (data.choices[0].text) {
+                        return String(data.choices[0].text);
+                    }
+                }
+                
+                // Extract all string values from object
+                const extractAllStrings = (obj) => {
+                    const strings = [];
+                    for (const key in obj) {
+                        if (obj.hasOwnProperty(key)) {
+                            const value = obj[key];
+                            if (typeof value === 'string' && value.trim() !== '') {
+                                strings.push(value);
+                            } else if (typeof value === 'object' && value !== null) {
+                                strings.push(...extractAllStrings(value));
+                            }
+                        }
+                    }
+                    return strings;
+                };
+                
+                const allStrings = extractAllStrings(data);
+                console.log('🔄 Extracted strings from object:', allStrings);
+                
+                if (allStrings.length > 0) {
+                    return allStrings.join(' ');
+                }
+                
+                // Final fallback - convert object to readable text
+                const fallbackText = JSON.stringify(data)
+                    .replace(/[{}"]/g, '')
+                    .replace(/,/g, ' ')
+                    .replace(/:/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                
+                console.log('🔄 Fallback text:', fallbackText);
+                return fallbackText;
+            }
+            
+            // If it's a string, check if it's JSON
+            if (typeof data === 'string') {
+                console.log('🔄 Processing string data');
+                
+                // Remove any extra whitespace
+                let trimmed = data.trim();
+                
+                // ✅ HANDLE MARKDOWN CODE BLOCKS - Remove ```json and ``` wrappers
+                if (trimmed.startsWith('```json') || trimmed.startsWith('```')) {
+                    console.log('🔄 Found markdown code block, removing wrapper');
+                    // Remove opening ```json or ```
+                    trimmed = trimmed.replace(/^```json\s*/, '').replace(/^```\s*/, '');
+                    // Remove closing ```
+                    trimmed = trimmed.replace(/\s*```$/, '');
+                    trimmed = trimmed.trim();
+                    console.log('🔄 After removing markdown wrapper:', trimmed);
+                }
+                
+                // Check if string looks like JSON
+                if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                    console.log('🔄 String looks like JSON, trying to parse');
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        console.log('🔄 Parsed JSON:', parsed);
+                        
+                        if (parsed.text) {
+                            console.log('🔄 Found text property:', parsed.text);
+                            return String(parsed.text);
+                        }
+                        if (parsed.content) return String(parsed.content);
+                        if (parsed.message) return String(parsed.message);
+                        if (parsed.response) return String(parsed.response);
+                        
+                        // If no standard properties, try to extract any string value
+                        const values = Object.values(parsed);
+                        const stringValues = values.filter(v => typeof v === 'string' && v.trim() !== '');
+                        if (stringValues.length > 0) {
+                            console.log('🔄 Found string values:', stringValues);
+                            return stringValues.join(' ');
+                        }
+                    } catch (parseError) {
+                        console.log('🔄 JSON parsing failed:', parseError);
+                        // If JSON parsing fails, try regex extraction
+                        const textMatch = trimmed.match(/"text"\s*:\s*"([^"]+)"/);
+                        if (textMatch && textMatch[1]) {
+                            console.log('🔄 Regex extracted text:', textMatch[1]);
+                            return textMatch[1];
+                        }
+                        
+                        // More aggressive regex - extract any quoted string after a colon
+                        const anyTextMatch = trimmed.match(/:\s*"([^"]+)"/);
+                        if (anyTextMatch && anyTextMatch[1]) {
+                            console.log('🔄 Regex extracted any text:', anyTextMatch[1]);
+                            return anyTextMatch[1];
+                        }
+                    }
+                }
+                
+                // If not JSON-like, return as is
+                console.log('🔄 Returning original string');
+                return trimmed;
+            }
+            
+            // Final fallback
+            const result = String(data);
+            console.log('🔄 Final fallback result:', result);
+            return result;
+            
+        } catch (error) {
+            console.error('🚫 Error in convertObjectToText:', error);
+            return typeof data === 'object' ? JSON.stringify(data) : String(data);
+        }
+    };
+
     const handleUserSelect = (userId) => {
         console.log('Clicking user ID:', userId);
         console.log('Current selectedUsers:', selectedUsers);
@@ -117,9 +263,19 @@ const Project = () => {
           
             receiveMessage('event', (data) => {
                 console.log('📨 Message received from server:', data);
+                console.log('📨 Raw message data:', data.message);
+                console.log('📨 Original data message:', data.originalData?.message);
               
                 const senderId = data.sender?.id || data.sender || data.originalData?.sender;
-                const messageText = data.message || data.originalData?.message;
+                let messageText = data.message || data.originalData?.message;
+                
+                console.log('📨 Message before conversion:', messageText);
+                console.log('📨 Message type:', typeof messageText);
+                
+                // ✅ Convert object response to text format
+                messageText = convertObjectToText(messageText);
+                
+                console.log('📨 Message after conversion:', messageText);
               
                 setMessages(prevMessages => [...prevMessages, {
                     id: Date.now() + Math.random(),
@@ -190,7 +346,7 @@ const Project = () => {
     return (
         <>
             {/* ✅ Add custom CSS to hide scrollbar */}
-            <style jsx>{`
+            <style>{`
                 .scrollbar-hide {
                     -ms-overflow-style: none;  /* Internet Explorer 10+ */
                     scrollbar-width: none;  /* Firefox */
@@ -199,10 +355,11 @@ const Project = () => {
                     display: none;  /* Safari and Chrome */
                 }
             `}</style>
-            
+
+
             <main className='h-screen w-screen flex'>
                 {/* ✅ FIXED: Removed bg-slate-300, added proper flex structure */}
-                <section className='flex relative flex-col h-full min-w-96'>
+                <section className='flex relative flex-col h-full min-w-96 '>
                     {/* Header - fixed height */}
                     <header className='flex justify-between items-center p-2 px-4 w-full bg-slate-100 flex-shrink-0'>
                         <button
@@ -230,19 +387,19 @@ const Project = () => {
                                 </div>
                             ) : (
                                 <>
-                   {messages.map((msg) => (
-    <div key={msg.id} className={`max-w-96 message flex flex-col gap-1 w-fit rounded-md p-3 shadow-sm ${msg.isOwn ? 'ml-auto bg-blue-50 text-right' : 'mr-auto bg-slate-50 text-left'}`}>
-        <small className='opacity-65 text-xs font-medium'>
-            {getUserEmail(msg.sender)}
-        </small>
-        <div className='overflow-auto bg-slate-900 text-white rounded-sm p-2'>
-            <Markdown>{msg.message}</Markdown>
-        </div>
-        <small className='opacity-50 text-xs'>
-            {msg.timestamp.toLocaleTimeString()}
-        </small>
-    </div>
-))}
+                                    {messages.map((msg) => (
+                                        <div key={msg.id} className={`max-w-96 message flex flex-col gap-1 w-fit rounded-md p-3 shadow-sm ${msg.isOwn ? 'ml-auto bg-blue-50 text-right' : 'mr-auto bg-slate-50 text-left'}`}>
+                                            <small className='opacity-65 text-xs font-medium'>
+                                                {getUserEmail(msg.sender)}
+                                            </small>
+                                            <div className='overflow-auto bg-slate-900 text-white rounded-sm p-2'>
+                                                <Markdown>{msg.message}</Markdown>
+                                            </div>
+                                            <small className='opacity-50 text-xs'>
+                                                {msg.timestamp.toLocaleTimeString()}
+                                            </small>
+                                        </div>
+                                    ))}
                                     {/* ✅ Invisible div to scroll to */}
                                     <div ref={messagesEndRef} />
                                 </>
@@ -315,7 +472,11 @@ const Project = () => {
                             )}
                         </div>
                     </div>
+                    
                 </section>
+        
+ 
+
             </main>
 
             {/* Modal remains the same */}
@@ -406,7 +567,8 @@ const Project = () => {
                         </div>
                     </div>
                 </div>
-            )}
+          
+          )}
         </>
     )
 }
